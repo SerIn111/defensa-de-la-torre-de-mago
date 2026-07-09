@@ -45,8 +45,9 @@ export default class GameScene extends Phaser.Scene {
         this.shootSound = this.sound.add('shoot', { volume: 0.5 });
         this.hitSound = this.sound.add('hit', { volume: 0.8 });
         this.shieldSound = this.sound.add('shoot', { volume: 0.1, rate: 0.2, loop: true });
-
-        if (this.mode === 3) {
+        this.zapSound = this.sound.add('zap', { volume: 0.6 });
+        
+        if (!this.sound.get('bgm') || !this.sound.get('bgm').isPlaying) {
             this.bgm = this.sound.add('bgm', { loop: true, volume: 0.3 });
             this.bgm.play();
         }
@@ -146,33 +147,47 @@ export default class GameScene extends Phaser.Scene {
         let hp = 1;
         let size = 20;
         let points = 10;
+        
+        let golemChance = 0;
+        let impChance = 0;
+        let titanChance = 0;
 
-        if (this.mode >= 2) {
-            // Fase 2: mucho más rápidos los spawns
-            if (this.timeElapsed >= 30) {
-                this.spawnEvent.delay = 600;
-            }
-
-            // Ajuste de probabilidades para que haya más demonios rojos
-            let golemChance = this.timeElapsed >= 30 ? 0.25 : 0.15;
-            let impChance = this.mode === 3 ? 0.15 : 0;
-
-            let rand = Math.random();
-            if (rand < golemChance) {
-                type = 'golem';
-                speed = 25;
-                hp = 3;
-                size = 35;
-                points = 50;
-            } else if (rand < golemChance + impChance) {
-                type = 'imp';
-                speed = 120; // Muy rápido
-                hp = 1;
-                size = 15;
-                points = 30;
-            }
+        if (this.mode >= 2 && this.timeElapsed >= 30) {
+            this.spawnEvent.delay = 600;
         }
 
+        if (this.mode === 1) {
+            golemChance = 0.15;
+        } else if (this.mode === 2) {
+            golemChance = 0.25;
+            impChance = 0.15;
+        } else if (this.mode === 3) {
+            golemChance = 0.25;
+            impChance = 0.20;
+            titanChance = 0.05;
+        }
+        
+        let rand = Math.random();
+        if (rand < titanChance) {
+            type = 'titan';
+            speed = 15; // Muy lento
+            hp = 10;
+            size = 45;
+            points = 100;
+        } else if (rand < titanChance + impChance) {
+            type = 'imp';
+            speed = 120; // Muy rápido
+            hp = 1;
+            size = 15;
+            points = 30;
+        } else if (rand < titanChance + impChance + golemChance) {
+            type = 'golem';
+            speed = 25;
+            hp = 3;
+            size = 35;
+            points = 50;
+        }
+        
         let texture = type;
         let enemy = this.physics.add.sprite(x, y, texture);
         enemy.setDisplaySize(size * 2, size * 2);
@@ -213,8 +228,8 @@ export default class GameScene extends Phaser.Scene {
 
         if (this.shieldSound) this.shieldSound.play();
 
-        // Dura 3 segundos
-        this.time.delayedCall(3000, () => {
+        // Dura 5 segundos
+        this.time.delayedCall(5000, () => {
             if (this.shieldSound) this.shieldSound.stop();
 
             this.barrierActive = false;
@@ -282,7 +297,10 @@ export default class GameScene extends Phaser.Scene {
             }
 
             if (this.hitSound) {
-                if (enemy.texture.key === 'golem') {
+                if (enemy.texture.key === 'titan') {
+                    // Sonido extremadamente grave
+                    this.hitSound.play({ rate: 0.12, volume: 1.0 });
+                } else if (enemy.texture.key === 'golem') {
                     // Sonido grave extremo (rate 0.25)
                     this.hitSound.play({ rate: 0.25, volume: 1.0 });
                 } else if (enemy.texture.key === 'imp') {
@@ -311,7 +329,9 @@ export default class GameScene extends Phaser.Scene {
 
     hitBarrier(barrier, enemy) {
         if (!this.barrierActive) return;
-
+        
+        if (this.zapSound) this.zapSound.play();
+        
         // Destruye enemigos que tocan la barrera
         if (this.mode >= 2) {
             this.score += enemy.points;
